@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { Search, X, RefreshCw, Phone, Mail, User, Building2, Calendar, Copy, ChevronDown } from "lucide-react";
+import { Search, X, RefreshCw, Building2, Copy, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const Booking = () => {
@@ -11,44 +11,55 @@ const Booking = () => {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // --- API CONNECTION CONFIG ---
+  // Ensure VITE_API_URL is set to https://best-of-amravati.vercel.app/api in your .env
+  const API_ENDPOINT = `${import.meta.env.VITE_API_URL}/bookings`;
+
   const fetchBookings = async () => {
     setLoading(true);
     try {
-      const response = await fetch(""); 
-      if (!response.ok) throw new Error();
+      const response = await fetch(API_ENDPOINT);
+      if (!response.ok) throw new Error("Failed to fetch");
       const data = await response.json();
-      setBookings(data);
+      
+      // Map MongoDB _id to id for the table
+      const formattedData = data.map(item => ({
+        ...item,
+        id: item._id?.substring(18).toUpperCase() || "#BK-XXXX", // Shortened ID for UI
+        fullId: item._id,
+        date: new Date(item.createdAt).toLocaleDateString(),
+        amount: "₹3,500" // Hardcoded as per your business model
+      }));
+      
+      setBookings(formattedData);
     } catch (err) {
-      setBookings([
-        { 
-          id: "#PAY-90124", 
-          businessName: "Amravati Sweets", 
-          owner: "Rajesh Kumar", 
-          phone: "+91 98765 43210", 
-          email: "rajesh@amravati.com",
-          amount: "₹3,500", 
-          status: "Completed", 
-          date: "2026-01-05" 
-        },
-        { 
-          id: "#PAY-90125", 
-          businessName: "City Gym", 
-          owner: "Anita Deshmukh", 
-          phone: "+91 91234 56789", 
-          email: "anita@citygym.in",
-          amount: "₹3,500", 
-          status: "Processing", 
-          date: "2026-01-04" 
-        },
-      ]);
-    } finally { setLoading(false); }
+      console.error("Fetch Error:", err);
+      // Fallback to empty or error state
+      setBookings([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { fetchBookings(); }, []);
+  useEffect(() => {
+    fetchBookings();
+  }, []);
 
-  const handleStatusChange = (id, newStatus) => {
-    setBookings(prev => prev.map(b => b.id === id ? { ...b, status: newStatus } : b));
-    setSelectedBooking(prev => ({ ...prev, status: newStatus }));
+  const handleStatusChange = async (id, newStatus) => {
+    try {
+      // Optimistic Update in UI
+      setBookings(prev => prev.map(b => b.fullId === id ? { ...b, status: newStatus } : b));
+      
+      // API call to update status in MongoDB
+      await fetch(API_ENDPOINT, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status: newStatus })
+      });
+
+    } catch (error) {
+      console.error("Failed to update status");
+    }
   };
 
   const copyToClipboard = (text) => {
@@ -58,11 +69,11 @@ const Booking = () => {
   const filtered = bookings.filter((b) => {
     const search = searchTerm.toLowerCase();
     const matchesSearch = 
-      b.businessName.toLowerCase().includes(search) || 
-      b.owner.toLowerCase().includes(search) || 
-      b.id.toLowerCase().includes(search);
+      b.businessName?.toLowerCase().includes(search) || 
+      b.ownerName?.toLowerCase().includes(search) || 
+      b.fullId?.toLowerCase().includes(search);
     
-    const matchesStatus = statusFilter === "all" || b.status.toLowerCase() === statusFilter.toLowerCase();
+    const matchesStatus = statusFilter === "all" || b.status?.toLowerCase() === statusFilter.toLowerCase();
     
     return matchesSearch && matchesStatus;
   });
@@ -80,7 +91,7 @@ const Booking = () => {
         </button>
       </div>
 
-      {/* Search Bar matching your image layout */}
+      {/* Search Bar */}
       <div className="flex gap-4 mb-6">
         <div className="relative flex-1 group">
           <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
@@ -100,8 +111,9 @@ const Booking = () => {
             onChange={(e) => setStatusFilter(e.target.value)}
           >
             <option value="all">all</option>
-            <option value="completed">Completed</option>
-            <option value="processing">Processing</option>
+            <option value="PAID">Paid</option>
+            <option value="Processing">Processing</option>
+            <option value="Completed">Completed</option>
           </select>
           <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
             <ChevronDown size={14} className="text-slate-400" />
@@ -123,31 +135,37 @@ const Booking = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50 text-[13px]">
-              {filtered.map((booking) => (
-                <tr 
-                  key={booking.id} 
-                  className="hover:bg-slate-50/80 cursor-pointer transition-all active:bg-slate-100"
-                  onClick={() => { setSelectedBooking(booking); setIsModalOpen(true); }}
-                >
-                  <td className="px-6 py-4 font-medium text-slate-500 tabular-nums">{booking.id}</td>
-                  <td className="px-6 py-4 font-medium text-slate-900">{booking.businessName}</td>
-                  <td className="px-6 py-4 text-slate-600">{booking.owner}</td>
-                  <td className="px-6 py-4 text-center">
-                    <span className={`px-3 py-1 rounded-full text-[11px] font-medium ${
-                      booking.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-indigo-50 text-indigo-600'
-                    }`}>
-                      {booking.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right text-slate-400 tabular-nums">{booking.date}</td>
-                </tr>
-              ))}
+              {loading ? (
+                 <tr><td colSpan="5" className="px-6 py-12 text-center text-slate-400">Loading bookings...</td></tr>
+              ) : filtered.length === 0 ? (
+                 <tr><td colSpan="5" className="px-6 py-12 text-center text-slate-400">No bookings found.</td></tr>
+              ) : (
+                filtered.map((booking) => (
+                  <tr 
+                    key={booking.fullId} 
+                    className="hover:bg-slate-50/80 cursor-pointer transition-all active:bg-slate-100"
+                    onClick={() => { setSelectedBooking(booking); setIsModalOpen(true); }}
+                  >
+                    <td className="px-6 py-4 font-medium text-slate-500 tabular-nums">{booking.id}</td>
+                    <td className="px-6 py-4 font-medium text-slate-900">{booking.businessName}</td>
+                    <td className="px-6 py-4 text-slate-600">{booking.ownerName}</td>
+                    <td className="px-6 py-4 text-center">
+                      <span className={`px-3 py-1 rounded-full text-[11px] font-medium ${
+                        booking.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-indigo-50 text-indigo-600'
+                      }`}>
+                        {booking.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right text-slate-400 tabular-nums">{booking.date}</td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Detail Modal with restored fields */}
+      {/* Detail Modal */}
       <AnimatePresence>
         {isModalOpen && selectedBooking && (
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
@@ -162,7 +180,7 @@ const Booking = () => {
                     <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><Building2 size={20} /></div>
                     <div>
                       <h2 className="text-lg font-semibold text-slate-800">{selectedBooking.businessName}</h2>
-                      <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-widest">{selectedBooking.id}</p>
+                      <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-widest">{selectedBooking.fullId}</p>
                     </div>
                 </div>
                 <button onClick={() => setIsModalOpen(false)} className="p-1.5 hover:bg-slate-200 rounded-full transition-colors text-slate-400">
@@ -174,7 +192,7 @@ const Booking = () => {
                 <div className="grid grid-cols-2 gap-y-8 gap-x-6">
                   <div>
                     <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1">Customer Name</p>
-                    <p className="text-sm text-slate-700 font-medium">{selectedBooking.owner}</p>
+                    <p className="text-sm text-slate-700 font-medium">{selectedBooking.ownerName}</p>
                   </div>
                   <div>
                     <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1">Date Paid</p>
@@ -202,9 +220,10 @@ const Booking = () => {
                         <p className="text-[10px] font-semibold text-slate-400 uppercase mb-2">Update Order Status</p>
                         <select 
                             value={selectedBooking.status}
-                            onChange={(e) => handleStatusChange(selectedBooking.id, e.target.value)}
+                            onChange={(e) => handleStatusChange(selectedBooking.fullId, e.target.value)}
                             className="bg-white border border-slate-200 text-indigo-600 text-sm font-semibold py-2 px-4 rounded-lg outline-none cursor-pointer"
                         >
+                            <option value="PAID">Paid</option>
                             <option value="Processing">Processing</option>
                             <option value="Completed">Completed</option>
                             <option value="Cancelled">Cancelled</option>

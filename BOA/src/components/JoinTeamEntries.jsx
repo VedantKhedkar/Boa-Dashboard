@@ -11,29 +11,59 @@ const JoinTeamEntry = () => {
   const [applicants, setApplicants] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // --- API CONFIGURATION ---
+  const API_ENDPOINT = `${import.meta.env.VITE_API_URL}/join-team`;
+
   const fetchApplicants = async () => {
     setLoading(true);
     try {
-      // Mock data for Team Applications
-      const mockData = [
-        { id: "#APP-101", name: "Amit Deshmukh", email: "amit@boa.com", phone: "+91 91111 22222", role: "Video Editing", address: "Rajapeth, Amravati", portfolio: "instagram.com/amit_edits", status: "New", date: "2026-01-02" },
-        { id: "#APP-102", name: "Sana Sheikh", email: "sana@boa.com", phone: "+91 93333 44444", role: "Content Creation", address: "Sainagar, Amravati", portfolio: "behance.net/sana_creatives", status: "Interviewing", date: "2026-01-01" },
-      ];
-      setApplicants(mockData);
-    } finally { setLoading(false); }
+      const response = await fetch(API_ENDPOINT);
+      if (!response.ok) throw new Error("Connection failed");
+      const data = await response.json();
+      
+      // Map MongoDB data to UI friendly format
+      const formatted = data.map(app => ({
+        ...app,
+        id: app._id.substring(app._id.length - 6).toUpperCase(), // Short ID for display
+        fullId: app._id,
+        date: new Date(app.createdAt).toLocaleDateString('en-IN'),
+        // Ensure status matches the select options
+        status: app.status.charAt(0).toUpperCase() + app.status.slice(1) 
+      }));
+
+      setApplicants(formatted);
+    } catch (err) {
+      console.error("Dashboard Fetch Error:", err);
+      setApplicants([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { fetchApplicants(); }, []);
+  useEffect(() => {
+    fetchApplicants();
+  }, []);
 
-  const handleStatusChange = (id, newStatus) => {
-    setApplicants(prev => prev.map(a => a.id === id ? { ...a, status: newStatus } : a));
+  const handleStatusChange = async (id, newStatus) => {
+    try {
+      // Optimistic UI update
+      setApplicants(prev => prev.map(a => a.fullId === id ? { ...a, status: newStatus } : a));
+      
+      // Update MongoDB via Next.js API
+      await fetch(API_ENDPOINT, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status: newStatus.toLowerCase() })
+      });
+    } catch (error) {
+      console.error("Update failed:", error);
+    }
   };
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
   };
 
-  // Enhanced Filter Logic: Search by Name, Role, or ID
   const filtered = applicants.filter((a) => {
     const search = searchTerm.toLowerCase();
     const matchesSearch = 
@@ -54,12 +84,12 @@ const JoinTeamEntry = () => {
           <h1 className="text-2xl font-bold text-[#1a1a1a]">Team Applications</h1>
           <p className="text-slate-500 text-sm">Reviewing talent for Best of Amravati Media</p>
         </div>
-        <button onClick={fetchApplicants} className="p-2 text-slate-400 hover:text-indigo-600 transition-colors">
-          <RefreshCw size={20} className={loading ? "animate-spin" : ""} />
+        <button onClick={fetchApplicants} className="p-2.5 hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors">
+          <RefreshCw size={20} className={loading ? "animate-spin text-indigo-600" : "text-slate-400"} />
         </button>
       </div>
 
-      {/* Replicated Search Bar Section */}
+      {/* Search Bar */}
       <div className="flex gap-4 mb-6">
         <div className="relative flex-1 group">
           <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
@@ -82,6 +112,7 @@ const JoinTeamEntry = () => {
             <option value="new">New</option>
             <option value="interviewing">Interviewing</option>
             <option value="rejected">Rejected</option>
+            <option value="hired">Hired</option>
           </select>
           <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
             <ChevronDown size={14} className="text-slate-400" />
@@ -103,30 +134,37 @@ const JoinTeamEntry = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50 text-[13px]">
-              {filtered.map((app) => (
-                <tr key={app.id} className="hover:bg-slate-50/50 transition-colors group">
-                  <td className="px-6 py-4 font-semibold text-slate-800">{app.name}</td>
-                  <td className="px-6 py-4 text-slate-600 font-medium">{app.role}</td>
-                  <td className="px-6 py-4 text-center">
-                    <span className={`px-3 py-1 rounded-full text-[11px] font-semibold ${
-                      app.status === 'New' ? 'bg-indigo-50 text-indigo-600' :
-                      app.status === 'Interviewing' ? 'bg-amber-50 text-amber-600' :
-                      'bg-emerald-50 text-emerald-600'
-                    }`}>
-                      {app.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-center text-slate-400">{app.date}</td>
-                  <td className="px-6 py-4 text-right">
-                    <button 
-                      onClick={() => { setSelectedApplicant(app); setIsModalOpen(true); }}
-                      className="text-indigo-600 font-semibold hover:text-indigo-800 transition-colors"
-                    >
-                      View Profile
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {loading ? (
+                 <tr><td colSpan="5" className="px-6 py-12 text-center text-slate-400">Fetching applications...</td></tr>
+              ) : filtered.length === 0 ? (
+                 <tr><td colSpan="5" className="px-6 py-12 text-center text-slate-400">No applications found.</td></tr>
+              ) : (
+                filtered.map((app) => (
+                  <tr key={app.fullId} className="hover:bg-slate-50/50 transition-colors group">
+                    <td className="px-6 py-4 font-semibold text-slate-800">{app.name}</td>
+                    <td className="px-6 py-4 text-slate-600 font-medium">{app.role}</td>
+                    <td className="px-6 py-4 text-center">
+                      <span className={`px-3 py-1 rounded-full text-[11px] font-semibold ${
+                        app.status === 'New' ? 'bg-indigo-50 text-indigo-600' :
+                        app.status === 'Interviewing' ? 'bg-amber-50 text-amber-600' :
+                        app.status === 'Hired' ? 'bg-emerald-50 text-emerald-600' :
+                        'bg-rose-50 text-rose-600'
+                      }`}>
+                        {app.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-center text-slate-400">{app.date}</td>
+                    <td className="px-6 py-4 text-right">
+                      <button 
+                        onClick={() => { setSelectedApplicant(app); setIsModalOpen(true); }}
+                        className="text-indigo-600 font-semibold hover:text-indigo-800 transition-colors"
+                      >
+                        View Profile
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -191,7 +229,7 @@ const JoinTeamEntry = () => {
                       <LinkIcon size={12} /> Portfolio & Work
                     </div>
                     <a 
-                      href={`https://${selectedApplicant.portfolio}`} 
+                      href={selectedApplicant.portfolio.startsWith('http') ? selectedApplicant.portfolio : `https://${selectedApplicant.portfolio}`} 
                       target="_blank" 
                       rel="noreferrer"
                       className="text-indigo-600 font-bold hover:text-indigo-800 hover:underline inline-flex items-center gap-1"
@@ -201,13 +239,12 @@ const JoinTeamEntry = () => {
                   </div>
                 </div>
 
-                {/* Edit Status in Modal */}
                 <div className="pt-6 border-t border-slate-100 flex justify-between items-center">
                     <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Edit Application Status</p>
                         <select 
                             value={selectedApplicant.status}
-                            onChange={(e) => handleStatusChange(selectedApplicant.id, e.target.value)}
+                            onChange={(e) => handleStatusChange(selectedApplicant.fullId, e.target.value)}
                             className="bg-slate-50 border border-slate-200 text-indigo-600 text-sm font-bold py-2 px-3 rounded-lg outline-none focus:border-indigo-500"
                         >
                             <option value="New">New</option>
@@ -217,7 +254,7 @@ const JoinTeamEntry = () => {
                         </select>
                     </div>
                     <div className="text-right">
-                        <p className="text-[11px] text-slate-400 font-medium italic">ID: {selectedApplicant.id}</p>
+                        <p className="text-[11px] text-slate-400 font-medium italic">Internal ID: {selectedApplicant.id}</p>
                     </div>
                 </div>
               </div>
