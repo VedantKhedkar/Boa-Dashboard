@@ -2,22 +2,23 @@
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { HomeIcon, Calendar, UsersRound } from "lucide-react" // Added UsersRound
+import { Calendar, UsersRound, MessageSquare } from "lucide-react" // Added MessageSquare
 
 // Import your dashboard components
-
 import Bookings from "./Bookings.jsx"
 import JoinTeamEntries from "./JoinTeamEntries.jsx"
+import LeadsEntry from "./LeadsEntry.jsx" // Import the new Leads component
 
 // Sidebar configuration array
 const sidebarItems = [
- 
     { title: "Bookings", Content: Bookings, Icon: Calendar },
     { title: "Join Team", Content: JoinTeamEntries, Icon: UsersRound }, 
+    { title: "Leads", Content: LeadsEntry, Icon: MessageSquare }, // Added Leads button config
 ]
 
 function Sidebar({ isOpen: propIsOpen }) {
-    const [activeContent, setActiveContent] = useState("Home")
+    // Set "Bookings" as default active content since "Home" isn't in sidebarItems
+    const [activeContent, setActiveContent] = useState("Bookings")
     const [isMobile, setIsMobile] = useState(false)
     const [isOpen, setIsOpen] = useState(propIsOpen)
 
