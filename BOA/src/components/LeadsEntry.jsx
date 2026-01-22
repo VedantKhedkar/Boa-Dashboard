@@ -13,9 +13,8 @@ const LeadsEntry = () => {
   const [fetchError, setFetchError] = useState(null);
 
   // --- API CONFIGURATION ---
-  // If VITE_API_URL is missing, it defaults to relative path /api/leads
-  const BASE_URL = import.meta.env.VITE_API_URL || "";
-  const API_ENDPOINT = `${BASE_URL}/api/leads`;
+  // Adjusted to prevent the /api/api/leads 404 error
+  const API_ENDPOINT = `${import.meta.env.VITE_API_URL}/leads`;
 
   const fetchLeads = useCallback(async () => {
     setLoading(true);
@@ -23,23 +22,14 @@ const LeadsEntry = () => {
     try {
       const response = await fetch(API_ENDPOINT);
 
-      // 1. Check if the response is OK (200-299)
       if (!response.ok) {
-        throw new Error(`Server Error: ${response.status} ${response.statusText}`);
-      }
-
-      // 2. Check if the response is actually JSON (Prevents HTML 404 parsing error)
-      const contentType = response.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        const text = await response.text();
-        console.error("Received non-JSON response:", text.substring(0, 200));
-        throw new Error("Server returned HTML (likely a 404). Check VITE_API_URL in Vercel settings.");
+        throw new Error(`Server Error: ${response.status}. Path might be incorrect.`);
       }
 
       const data = await response.json();
       
-      // Handle different data structures (array vs object with leads property)
-      const rawLeads = Array.isArray(data) ? data : (data.leads || []);
+      // Handle the object structure { leads: [...] }
+      const rawLeads = data.leads || (Array.isArray(data) ? data : []);
 
       const formatted = rawLeads.map(lead => ({
         ...lead,
@@ -78,7 +68,7 @@ const LeadsEntry = () => {
       if (!response.ok) throw new Error("Failed to update status");
     } catch (error) {
       console.error("Update failed:", error);
-      fetchLeads(); // Rollback on failure
+      fetchLeads(); 
     }
   };
 
@@ -104,18 +94,17 @@ const LeadsEntry = () => {
       <div className="mb-6 flex justify-between items-start">
         <div>
           <h1 className="text-2xl font-bold text-[#1a1a1a]">Chatbot Leads</h1>
-          <p className="text-slate-500 text-sm">Review leads captured from the chatbot database</p>
+          <p className="text-slate-500 text-sm">Reviewing business inquiries from the Chatbot</p>
         </div>
         <button onClick={fetchLeads} className="p-2.5 hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors">
           <RefreshCw size={20} className={loading ? "animate-spin text-indigo-600" : "text-slate-400"} />
         </button>
       </div>
 
-      {/* Error Alert */}
       {fetchError && (
         <div className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-xl flex items-center gap-3 text-rose-600 text-sm">
           <AlertCircle size={18} />
-          <p><strong>Fetch Error:</strong> {fetchError}. Check your environment variables in Vercel.</p>
+          <p><strong>Fetch Error:</strong> {fetchError}. Verify the API route on your backend.</p>
         </div>
       )}
 
@@ -127,7 +116,7 @@ const LeadsEntry = () => {
           </div>
           <input 
             type="text" 
-            placeholder="Search by name, profession, or mobile..." 
+            placeholder="Search leads..." 
             className="w-full bg-white border border-slate-200 rounded-lg py-2.5 pl-12 pr-4 outline-none focus:border-indigo-500 transition-all text-sm text-slate-600"
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -166,15 +155,15 @@ const LeadsEntry = () => {
               {loading ? (
                  <tr><td colSpan="5" className="px-6 py-12 text-center text-slate-400">Loading leads...</td></tr>
               ) : filtered.length === 0 ? (
-                 <tr><td colSpan="5" className="px-6 py-12 text-center text-slate-400">No leads found in database.</td></tr>
+                 <tr><td colSpan="5" className="px-6 py-12 text-center text-slate-400">No leads found.</td></tr>
               ) : (
                 filtered.map((lead) => (
                   <tr key={lead.fullId} className="hover:bg-slate-50/50 transition-colors group">
                     <td className="px-6 py-4">
                         <div className="font-semibold text-slate-800">{lead.name || "Unknown"}</div>
-                        <div className="text-[10px] text-slate-400 font-mono italic">ID: {lead.displayId}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">ID: {lead.displayId}</div>
                     </td>
-                    <td className="px-6 py-4 text-slate-600 font-medium">{lead.profession || "Not Provided"}</td>
+                    <td className="px-6 py-4 text-slate-600 font-medium">{lead.profession || "N/A"}</td>
                     <td className="px-6 py-4 text-center">
                       <span className={`px-3 py-1 rounded-full text-[11px] font-semibold ${
                         lead.status === 'New' ? 'bg-amber-50 text-amber-600' :
@@ -185,16 +174,13 @@ const LeadsEntry = () => {
                         {lead.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-center">
-                        <div className="text-slate-600 font-medium">{lead.date}</div>
-                        <div className="text-[10px] text-slate-400">{lead.time}</div>
-                    </td>
+                    <td className="px-6 py-4 text-center text-slate-500">{lead.date}</td>
                     <td className="px-6 py-4 text-right">
                       <button 
                         onClick={() => { setSelectedLead(lead); setIsModalOpen(true); }}
                         className="text-indigo-600 font-semibold hover:text-indigo-800 transition-colors"
                       >
-                        View Profile
+                        View
                       </button>
                     </td>
                   </tr>
@@ -210,9 +196,7 @@ const LeadsEntry = () => {
         {isModalOpen && selectedLead && (
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <motion.div 
-              initial={{ scale: 0.98, opacity: 0 }} 
-              animate={{ scale: 1, opacity: 1 }} 
-              exit={{ scale: 0.98, opacity: 0 }}
+              initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.98, opacity: 0 }}
               className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col border border-slate-200"
             >
               <div className="p-6 flex justify-between items-start bg-slate-50/50 border-b border-slate-100">
@@ -222,7 +206,7 @@ const LeadsEntry = () => {
                   </div>
                   <div>
                     <h2 className="text-lg font-bold text-slate-800">{selectedLead.name}</h2>
-                    <p className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">Lead ID: {selectedLead.displayId}</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Lead Details</p>
                   </div>
                 </div>
                 <button onClick={() => setIsModalOpen(false)} className="p-1.5 hover:bg-slate-200 rounded-full text-slate-400">
@@ -238,7 +222,6 @@ const LeadsEntry = () => {
                     </div>
                     <p className="text-slate-700 font-semibold">{selectedLead.profession}</p>
                   </div>
-
                   <div>
                     <div className="flex items-center gap-2 text-slate-400 mb-1.5 uppercase text-[10px] font-bold tracking-widest">
                       <Phone size={12} /> Mobile Number
@@ -248,18 +231,11 @@ const LeadsEntry = () => {
                         <button onClick={() => copyToClipboard(selectedLead.mobile)} className="opacity-0 group-hover:opacity-100 p-1 text-slate-300 hover:text-indigo-600 transition-all"><Copy size={12}/></button>
                     </div>
                   </div>
-
-                  <div className="col-span-2">
-                    <div className="flex items-center gap-2 text-slate-400 mb-1.5 uppercase text-[10px] font-bold tracking-widest">
-                      <Calendar size={12} /> Acquisition Timestamp
-                    </div>
-                    <p className="text-slate-700 font-semibold">{selectedLead.date} at {selectedLead.time}</p>
-                  </div>
                 </div>
 
                 <div className="pt-6 border-t border-slate-100 flex justify-between items-center">
                     <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Manage Status</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Lead Status</p>
                         <select 
                             value={selectedLead.status}
                             onChange={(e) => handleStatusChange(selectedLead.fullId, e.target.value)}
@@ -272,21 +248,16 @@ const LeadsEntry = () => {
                         </select>
                     </div>
                     <a 
-                      href={`https://wa.me/91${selectedLead.mobile}`} 
-                      target="_blank" 
-                      rel="noreferrer"
+                      href={`https://wa.me/91${selectedLead.mobile}`} target="_blank" rel="noreferrer"
                       className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-500 text-white rounded-lg text-xs font-bold hover:bg-emerald-600 transition-all"
                     >
-                      <MessageSquare size={14}/> WhatsApp Lead
+                      <MessageSquare size={14}/> WhatsApp
                     </a>
                 </div>
               </div>
 
               <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
-                <button 
-                  onClick={() => setIsModalOpen(false)} 
-                  className="px-6 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors"
-                >
+                <button onClick={() => setIsModalOpen(false)} className="px-6 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors">
                   Close
                 </button>
               </div>
