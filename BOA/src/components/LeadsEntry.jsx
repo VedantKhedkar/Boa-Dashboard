@@ -1,7 +1,6 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
-// Added Trash2 icon to imports
-import { Search, X, RefreshCw, Phone, User, Copy, ChevronDown, MessageSquare, Briefcase, Calendar, AlertCircle, Trash2 } from "lucide-react";
+import { Search, X, RefreshCw, Phone, User, Copy, ChevronDown, MessageSquare, Briefcase, Calendar, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const LeadsEntry = () => {
@@ -13,6 +12,8 @@ const LeadsEntry = () => {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
 
+  // --- API CONFIGURATION ---
+  // Adjusted to prevent the /api/api/leads 404 error
   const API_ENDPOINT = `${import.meta.env.VITE_API_URL}/leads`;
 
   const fetchLeads = useCallback(async () => {
@@ -20,10 +21,14 @@ const LeadsEntry = () => {
     setFetchError(null);
     try {
       const response = await fetch(API_ENDPOINT);
+
       if (!response.ok) {
         throw new Error(`Server Error: ${response.status}. Path might be incorrect.`);
       }
+
       const data = await response.json();
+      
+      // Handle the object structure { leads: [...] }
       const rawLeads = data.leads || (Array.isArray(data) ? data : []);
 
       const formatted = rawLeads.map(lead => ({
@@ -51,36 +56,19 @@ const LeadsEntry = () => {
 
   const handleStatusChange = async (id, newStatus) => {
     try {
+      // Optimistic UI update
       setLeads(prev => prev.map(l => l.fullId === id ? { ...l, status: newStatus } : l));
+      
       const response = await fetch(`${API_ENDPOINT}/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus.toLowerCase() })
       });
+
       if (!response.ok) throw new Error("Failed to update status");
     } catch (error) {
       console.error("Update failed:", error);
       fetchLeads(); 
-    }
-  };
-
-  // --- NEW DELETE HANDLER ---
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this lead?")) return;
-    
-    try {
-      // Optimistic UI update: Remove from local state immediately
-      setLeads(prev => prev.filter(lead => lead.fullId !== id));
-
-      const response = await fetch(`${API_ENDPOINT}/${id}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) throw new Error("Failed to delete lead");
-    } catch (error) {
-      console.error("Delete failed:", error);
-      alert("Error deleting lead. Please try again.");
-      fetchLeads(); // Re-fetch on failure to restore state
     }
   };
 
@@ -94,7 +82,9 @@ const LeadsEntry = () => {
       l.name?.toLowerCase().includes(search) || 
       l.profession?.toLowerCase().includes(search) || 
       l.mobile?.includes(search);
+    
     const matchesStatus = statusFilter === "all" || l.status.toLowerCase() === statusFilter.toLowerCase();
+    
     return matchesSearch && matchesStatus;
   });
 
@@ -158,7 +148,7 @@ const LeadsEntry = () => {
                 <th className="px-6 py-4">Profession</th>
                 <th className="px-6 py-4 text-center">Status</th>
                 <th className="px-6 py-4 text-center">Date</th>
-                <th className="px-6 py-4 text-right">Actions</th>
+                <th className="px-6 py-4 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50 text-[13px]">
@@ -186,20 +176,12 @@ const LeadsEntry = () => {
                     </td>
                     <td className="px-6 py-4 text-center text-slate-500">{lead.date}</td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex justify-end items-center gap-3">
-                        <button 
-                          onClick={() => { setSelectedLead(lead); setIsModalOpen(true); }}
-                          className="text-indigo-600 font-semibold hover:text-indigo-800 transition-colors"
-                        >
-                          View
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(lead.fullId)}
-                          className="text-slate-300 hover:text-rose-600 transition-colors p-1"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
+                      <button 
+                        onClick={() => { setSelectedLead(lead); setIsModalOpen(true); }}
+                        className="text-indigo-600 font-semibold hover:text-indigo-800 transition-colors"
+                      >
+                        View
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -265,20 +247,12 @@ const LeadsEntry = () => {
                             <option value="Rejected">Rejected</option>
                         </select>
                     </div>
-                    <div className="flex gap-2">
-                        <button 
-                          onClick={() => { handleDelete(selectedLead.fullId); setIsModalOpen(false); }}
-                          className="p-2.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                        <a 
-                          href={`https://wa.me/91${selectedLead.mobile}`} target="_blank" rel="noreferrer"
-                          className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-500 text-white rounded-lg text-xs font-bold hover:bg-emerald-600 transition-all"
-                        >
-                          <MessageSquare size={14}/> WhatsApp
-                        </a>
-                    </div>
+                    <a 
+                      href={`https://wa.me/91${selectedLead.mobile}`} target="_blank" rel="noreferrer"
+                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-500 text-white rounded-lg text-xs font-bold hover:bg-emerald-600 transition-all"
+                    >
+                      <MessageSquare size={14}/> WhatsApp
+                    </a>
                 </div>
               </div>
 
